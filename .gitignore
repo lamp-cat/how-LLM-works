@@ -1,0 +1,17 @@
+# Download model weights locally with npm run download:model.
+*.safetensors
+
+# Local dependencies, configuration and account data.
+node_modules/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.log
+
+# macOS archive metadata.
+.DS_Store
+__MACOSX/
+._*

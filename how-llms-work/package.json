@@ -1,0 +1,13 @@
+{
+  "name": "how-llms-work-local",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local high-fidelity runtime replica of mlx.void.app, with browser-side Qwen3.5 inference.",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "download:model": "python3 download-model.py"
+  },
+  "engines": { "node": ">=22.13" }
+}

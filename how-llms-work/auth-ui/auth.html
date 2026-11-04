@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0e0d11">
+  <title>账户 · How LLMs Work</title>
+  <link rel="stylesheet" href="/auth.css">
+  <script type="module" src="/auth.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/zh/chapters/overview" aria-label="How LLMs Work">
+      <span class="brand-icon">λ</span><span>How LLMs Work</span>
+    </a>
+    <div class="language-switch" role="group" aria-label="语言">
+      <button type="button" data-language="en">English</button>
+      <button type="button" data-language="zh">中文</button>
+    </div>
+  </header>
+  <main class="auth-layout">
+    <section class="story">
+      <span class="eyebrow">QWEN3.5 · 0.8B · WEBGPU</span>
+      <h1 data-i18n="storyTitle">从一个 token，<br>看懂整个模型。</h1>
+      <p class="story-copy" data-i18n="storyBody">运行真实的语言模型，沿着 16 章交互式课程，一步步理解它如何计算、如何生成。</p>
+      <div class="model-map" aria-hidden="true">
+        <div class="map-line"></div>
+        <div class="map-node"><span>01</span><b data-i18n="tokenize">分词</b><code>text → tokens</code></div>
+        <div class="map-node"><span>02</span><b data-i18n="embedding">嵌入</b><code>tokens → vectors</code></div>
+        <div class="map-node active"><span>03</span><b>Transformer × 24</b><code>attention + MLP</code></div>
+        <div class="map-node"><span>04</span><b data-i18n="generation">生成</b><code>logits → next token</code></div>
+      </div>
+      <div class="story-footer"><span class="status-dot"></span><span data-i18n="localCompute">模型计算在你的浏览器中完成</span></div>
+    </section>
+    <section class="form-section">
+      <div class="auth-card">
+        <span class="eyebrow" id="form-eyebrow">YOUR LEARNING SPACE</span>
+        <h2 id="form-title">欢迎回来</h2>
+        <p class="form-subtitle" id="form-subtitle">登录账号，继续探索模型的工作原理。</p>
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+        <form id="auth-form" novalidate>
+          <div class="field" id="name-field" hidden>
+            <label for="name" data-i18n="name">昵称</label>
+            <input id="name" name="name" type="text" autocomplete="nickname" maxlength="60">
+          </div>
+          <div class="field">
+            <label for="email" data-i18n="email">邮箱</label>
+            <input id="email" name="email" type="email" autocomplete="username" maxlength="254" required placeholder="you@example.com">
+          </div>
+          <div class="field">
+            <label for="password" data-i18n="password">密码</label>
+            <div class="password-wrapper">
+              <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+              <button id="toggle-password" type="button" aria-label="显示密码">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <small id="password-hint" data-i18n="passwordHint">至少 8 个字符，最长 128 个字符</small>
+          </div>
+          <div class="field" id="confirm-field" hidden>
+            <label for="confirm-password" data-i18n="confirmPassword">确认密码</label>
+            <input id="confirm-password" name="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="128">
+          </div>
+          <button class="primary-button" id="submit-button" type="submit"><span id="submit-label">登录</span><span aria-hidden="true">→</span></button>
+        </form>
+        <div id="account-details" hidden>
+          <dl><dt data-i18n="name">昵称</dt><dd id="account-name"></dd><dt data-i18n="email">邮箱</dt><dd id="account-email"></dd><dt data-i18n="joined">注册时间</dt><dd id="account-joined"></dd></dl>
+          <a class="primary-button" id="continue-link" href="/zh/chapters/overview"><span data-i18n="continueLearning">继续学习</span><span aria-hidden="true">→</span></a>
+          <button class="secondary-button" id="logout-button" type="button" data-i18n="logout">退出登录</button>
+        </div>
+        <p class="switch-mode" id="switch-mode"><span id="switch-text">还没有账号？</span> <a id="switch-link" href="/auth/register">创建账号</a></p>
+        <div class="card-footer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span data-i18n="accountHint">注册后即可使用账号登录</span></div>
+      </div>
+    </section>
+  </main>
+  <footer class="page-footer"><span>How LLMs Work</span><span data-i18n="footer">理解模型，从亲手运行开始。</span></footer>
+</body>
+</html>
