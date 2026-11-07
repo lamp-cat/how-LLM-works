@@ -1,0 +1,27 @@
+# Mac mini (linux/arm64). The host port is chosen by the coordinator.
+# Copy deploy/host.env.example to deploy/.env and set HOST_PORT before `docker compose up`.
+# Build from the repository root: docker compose -f deploy/docker-compose.yml build
+
+services:
+  how-llm-works:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: how-llm-works:prefix
+    platform: linux/arm64
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      BASE_PATH: /how-LLM-works
+      PUBLIC_ORIGIN: https://api.garryai.icu
+      AUTH_DATA_DIR: /data
+      ALLOW_UPSTREAM_MODEL: "0"
+      TRUST_PROXY: "1"
+    volumes:
+      - how-llm-auth:/data
+    ports:
+      - "127.0.0.1:${HOST_PORT:?Set HOST_PORT to the coordinator-chosen loopback port}:8080"
+    restart: unless-stopped
+
+volumes:
+  how-llm-auth:

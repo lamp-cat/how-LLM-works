@@ -5,10 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream';
 import { createAuth } from './auth.mjs';
+import { normalizeBasePath, stripBasePath, withBasePath } from './base-path.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const auth = createAuth();
 const port = Number(process.env.PORT || 5173);
+const host = process.env.HOST || '127.0.0.1';
+const basePath = normalizeBasePath();
+const allowUpstreamModel = process.env.ALLOW_UPSTREAM_MODEL !== '0';
 const modelRoot = path.resolve(process.env.MODEL_DIR || path.join(root, 'model'));
 const mime = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -54,6 +58,22 @@ function serveFile(req, res, file, stat) {
   if (req.method === 'HEAD' || size === 0) return res.end();
   pipeline(fs.createReadStream(file, { start, end }), res, () => {});
 }
+function rewriteHtml(html) {
+  if (!basePath) return html;
+  const boot = `<script>(function(){const base=${JSON.stringify(basePath)};globalThis.__HOW_LLMS_BASE__=base;const fix=el=>{if(!el||el.nodeType!==1)return;for(const attr of["href","src","action"]){if(!el.hasAttribute(attr))continue;const value=el.getAttribute(attr);if(!value||value[0]!=="/"||value[1]==="/"||value===base||value.startsWith(base+"/"))continue;el.setAttribute(attr,base+value);}};const walk=node=>{if(!node||node.nodeType!==1)return;fix(node);node.querySelectorAll("[href],[src],[action]").forEach(fix);};new MutationObserver(records=>{for(const record of records){if(record.type==="attributes")fix(record.target);for(const node of record.addedNodes)walk(node);}}).observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["href","src","action"]});document.addEventListener("click",event=>{const el=event.target&&event.target.closest&&event.target.closest("a[href],area[href]");if(el)fix(el);},true);walk(document.documentElement);})();</script>`;
+  const icon = `<link rel="icon" href="data:,">`;
+  const withBoot = html.replace(/<head[^>]*>/i, match => `${match}${icon}${boot}`);
+  return withBoot.replace(/(\s(?:href|src|action)=["'])\/(?!\/)/g, `$1${basePath}/`);
+}
+async function serveHtml(req, res, file) {
+  const body = Buffer.from(rewriteHtml(await fs.promises.readFile(file, 'utf8')));
+  res.setHeader('Content-Type', mime['.html']);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Content-Length', body.length);
+  res.writeHead(200);
+  if (req.method === 'HEAD') return res.end();
+  res.end(body);
+}
 // Only model files are proxied. Prompts and inference never go through this server.
 function proxyModel(req, res, modelPath, redirects = 0, target) {
   const url = target || `https://mlx.void.app/api/model/${modelPath}`;
@@ -79,16 +99,26 @@ function proxyModel(req, res, modelPath, redirects = 0, target) {
 
 const server = http.createServer(async (req, res) => {
   headers(res);
-  let pathname;
-  try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); }
+  let requestUrl;
+  try { requestUrl = new URL(req.url, 'http://localhost'); }
   catch { return error(res, 400, 'Bad URL'); }
-  if (await auth.handle(req, res, pathname)) return;
+  let pathname;
+  try { pathname = decodeURIComponent(requestUrl.pathname); }
+  catch { return error(res, 400, 'Bad URL'); }
+  if (basePath && pathname === basePath) {
+    res.writeHead(308, { Location: `${basePath}/${requestUrl.search}`, 'Cache-Control': 'no-store' });
+    return res.end();
+  }
+  const stripped = stripBasePath(pathname, basePath);
+  if (stripped == null) return error(res, 404, 'Not found');
+  if (await auth.handle(req, res, stripped)) return;
   if (!['GET', 'HEAD'].includes(req.method)) return error(res, 405, 'Method not allowed');
-  if (pathname === '/health') {
+  if (stripped === '/health') {
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
     return res.end(JSON.stringify({
-      status: 'ok', modelLocal: fs.existsSync(path.join(modelRoot, 'model.safetensors')),
-      webgpu: 'client-side', modelSource: 'local files, otherwise original model host',
+      status: 'ok', basePath: basePath || '/', modelLocal: fs.existsSync(path.join(modelRoot, 'model.safetensors')),
+      webgpu: 'client-side', modelSource: allowUpstreamModel ? 'local files, otherwise original model host' : 'local files only',
     }));
   }
   const publicFiles = {
@@ -96,63 +126,70 @@ const server = http.createServer(async (req, res) => {
     '/auth.js': 'auth-ui/auth.js',
     '/account-client.js': 'auth-ui/account-client.js',
   };
-  if (publicFiles[pathname]) {
-    const file = path.join(root, publicFiles[pathname]);
+  if (publicFiles[stripped]) {
+    const file = path.join(root, publicFiles[stripped]);
     return serveFile(req, res, file, await fs.promises.stat(file));
   }
-  if (['/auth/login', '/auth/register'].includes(pathname)) {
+  if (['/auth/login', '/auth/register'].includes(stripped)) {
     const file = path.join(root, 'auth-ui/auth.html');
-    return serveFile(req, res, file, await fs.promises.stat(file));
+    return serveHtml(req, res, file);
   }
   const currentUser = auth.user(req);
   if (!currentUser) {
     res.setHeader('Cache-Control', 'no-store');
-    if (pathname.startsWith('/api/') || pathname.startsWith('/model/')
-      || pathname.startsWith('/assets/') || pathname.startsWith('/worker/')
-      || path.extname(pathname)) {
+    if (stripped.startsWith('/api/') || stripped.startsWith('/model/')
+      || stripped.startsWith('/assets/') || stripped.startsWith('/worker/')
+      || path.extname(stripped)) {
       res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify({ error: 'authentication_required' }));
     }
-    res.writeHead(302, { Location: `/auth/login?next=${encodeURIComponent(req.url)}` });
+    const next = pathname + requestUrl.search;
+    res.writeHead(302, { Location: `${withBasePath('/auth/login', basePath)}?next=${encodeURIComponent(next)}` });
     return res.end();
   }
-  if (pathname === '/account') {
+  if (stripped === '/account') {
     const file = path.join(root, 'auth-ui/auth.html');
-    return serveFile(req, res, file, await fs.promises.stat(file));
+    return serveHtml(req, res, file);
   }
-  const isModel = pathname.startsWith('/api/model/') || pathname.startsWith('/model/');
+  const isModel = stripped.startsWith('/api/model/') || stripped.startsWith('/model/');
   // Only published web resources may be served. Never expose server code, docs or account storage.
-  if (!isModel && pathname !== '/index.html' && pathname !== '/mlx-core.opt.wasm'
-    && !pathname.startsWith('/assets/') && !pathname.startsWith('/worker/')
-    && path.extname(pathname)) return error(res, 404, 'Asset not found');
-  const relative = isModel ? pathname.replace(/^\/(?:api\/)?model\//, '')
-    : pathname.replace(/^\/worker\//, '/assets/').replace(/^\/+/, '');
+  if (!isModel && stripped !== '/index.html' && stripped !== '/mlx-core.opt.wasm'
+    && !stripped.startsWith('/assets/') && !stripped.startsWith('/worker/')
+    && path.extname(stripped)) return error(res, 404, 'Asset not found');
+  const relative = isModel ? stripped.replace(/^\/(?:api\/)?model\//, '')
+    : stripped.replace(/^\/worker\//, '/assets/').replace(/^\/+/, '');
   const base = isModel ? modelRoot : root;
   const file = path.resolve(base, relative || 'index.html');
   if (!file.startsWith(base + path.sep) && file !== base) return error(res, 403, 'Forbidden path');
   if (!isModel && file !== path.join(root, 'index.html') && file !== path.join(root, 'mlx-core.opt.wasm')
     && !file.startsWith(path.join(root, 'assets') + path.sep)) {
-    if (path.extname(pathname)) return error(res, 404, 'Asset not found');
-    const index = path.join(root, 'index.html');
-    return serveFile(req, res, index, await fs.promises.stat(index));
+    if (path.extname(stripped)) return error(res, 404, 'Asset not found');
+    return serveHtml(req, res, path.join(root, 'index.html'));
   }
   try {
     const stat = await fs.promises.stat(file);
-    if (stat.isFile()) return serveFile(req, res, file, stat);
+    if (stat.isFile()) {
+      if (file === path.join(root, 'index.html')) return serveHtml(req, res, file);
+      return serveFile(req, res, file, stat);
+    }
   } catch {}
   if (isModel) {
     if (!/^[a-zA-Z0-9_.-]+\.(?:json|safetensors|bin|model|txt)$/.test(relative))
       return error(res, 404, 'Unknown model file');
+    if (!allowUpstreamModel) return error(res, 503, 'Model resource unavailable');
     return proxyModel(req, res, relative);
   }
-  if (path.extname(pathname)) return error(res, 404, 'Asset not found');
-  const index = path.join(root, 'index.html');
-  try { serveFile(req, res, index, await fs.promises.stat(index)); }
+  if (path.extname(stripped)) return error(res, 404, 'Asset not found');
+  try { await serveHtml(req, res, path.join(root, 'index.html')); }
   catch { error(res, 503, 'Runtime files are not ready'); }
 });
-server.listen(port, '127.0.0.1', () => {
-  console.log(`How LLMs Work: http://localhost:${port}/zh/chapters/overview`);
+server.listen(port, host, () => {
+  const origin = `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`;
+  console.log(`How LLMs Work: ${origin}${withBasePath('/zh/chapters/overview', basePath)}`);
   console.log(`Model directory: ${modelRoot}`);
+  if (basePath && !process.env.PUBLIC_ORIGIN) {
+    console.warn('PUBLIC_ORIGIN is unset. Behind TLS set PUBLIC_ORIGIN=https://api.garryai.icu so session cookies are Secure and login checks match the browser origin.');
+  }
 });
 server.on('error', e => {
   console.error(e.code === 'EADDRINUSE' ? `Port ${port} is occupied. Run with PORT=5174.` : e);

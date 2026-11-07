@@ -1,0 +1,10 @@
+.git
+**/.DS_Store
+**/node_modules
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/*.safetensors
+**/*.log
+**/__MACOSX
+**/._*

@@ -14,6 +14,8 @@ npm start
 
 打开 <http://localhost:5173/zh/chapters/overview>，先注册账号再登录。macOS 用户也可以双击 `how-llms-work/启动网站.command`。
 
+生产环境挂在 `https://api.garryai.icu/how-LLM-works/`，与根路径的 New API 和 `/how-image-models-work/` 分开。反向代理必须保留这个大小写敏感的前缀，不能把它剥掉后转发。部署文件在 `Dockerfile` 和 `deploy/`。本地 `npm start` 不设置 `BASE_PATH` 时仍从网站根路径提供服务。
+
 ## 下载模型权重
 
 仓库包含模型配置、分词器、WASM 内核及网站运行资源。约 1.7 GB 的 `model.safetensors` 权重不提交到 Git，可使用项目自带的 Python 3 脚本下载：

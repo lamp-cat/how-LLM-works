@@ -66,7 +66,7 @@ npm run download:model
 
 ## 文件
 
-- `server.mjs`：本地服务，默认仅监听本机 5173 端口。
+- `server.mjs`：本地服务，默认仅监听本机 5173 端口。设置 `BASE_PATH=/how-LLM-works` 后，同一进程只接受这个大小写敏感的前缀，供与根路径 New API 共存。
 - `auth.mjs`：SQLite 账号存储、密码校验、会话和 CSRF 验证。
 - `auth-ui/`：注册、登录、账户页面与课程中的账户入口。
 - `index.html`、`assets/`：原站发布的课程运行资源。

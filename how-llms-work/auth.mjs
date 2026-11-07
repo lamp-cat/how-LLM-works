@@ -4,6 +4,10 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { clientAddress, normalizeBasePath } from './base-path.mjs';
+
+const basePath = normalizeBasePath();
+const cookiePath = basePath ? `${basePath}/` : '/';
 
 const scrypt = promisify(scryptCallback);
 const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -57,7 +61,7 @@ export function createAuth() {
     return Boolean(req.socket.encrypted) || process.env.PUBLIC_ORIGIN?.startsWith('https://');
   }
   function setCookie(req, res, name, value, maxAge, httpOnly = true) {
-    const cookie = `${name}=${value}; Path=/; SameSite=Lax; Max-Age=${maxAge}${httpOnly ? '; HttpOnly' : ''}${secure(req) ? '; Secure' : ''}`;
+    const cookie = `${name}=${value}; Path=${cookiePath}; SameSite=Lax; Max-Age=${maxAge}${httpOnly ? '; HttpOnly' : ''}${secure(req) ? '; Secure' : ''}`;
     const existing = res.getHeader('Set-Cookie') || [];
     res.setHeader('Set-Cookie', [...(Array.isArray(existing) ? existing : [existing]), cookie]);
   }
@@ -138,7 +142,7 @@ export function createAuth() {
         setCookie(req, res, 'llm_csrf', '', 0);
         json(res, 200, { ok: true }); return true;
       }
-      const ip = req.socket.remoteAddress || 'unknown';
+      const ip = clientAddress(req);
       const isRegister = pathname.endsWith('register');
       if (limited(`${isRegister ? 'register' : 'login'}:${ip}`, isRegister ? 10 : 40)) {
         res.setHeader('Retry-After', '900');
