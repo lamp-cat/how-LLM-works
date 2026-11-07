@@ -26,7 +26,7 @@ function freePort() {
 function startServer(env) {
   const child = spawn(process.execPath, ['server.mjs'], {
     cwd: here,
-    env: { ...process.env, HOST: '127.0.0.1', ALLOW_UPSTREAM_MODEL: '0', PUBLIC_ORIGIN: '', TRUST_PROXY: '', ...env },
+    env: { ...process.env, HOST: '127.0.0.1', ALLOW_UPSTREAM_MODEL: '0', PUBLIC_ORIGIN: '', TRUST_PROXY: '', REQUIRE_AUTH: '', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let logs = '';
@@ -87,7 +87,7 @@ test('base path helper keeps the exact segment', () => {
   else process.env.TRUST_PROXY = previous;
 });
 
-test('prefixed server, auth, assets, nested routes, and proxy behavior', { timeout: 180000 }, async t => {
+test('public prefixed course, assets, and retired auth routes', { timeout: 180000 }, async t => {
   const port = await freePort();
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'llm-prefix-'));
   const server = startServer({ PORT: String(port), BASE_PATH: base, AUTH_DATA_DIR: data });
@@ -97,18 +97,15 @@ test('prefixed server, auth, assets, nested routes, and proxy behavior', { timeo
   });
   await server.ready;
   const origin = `http://127.0.0.1:${port}`;
-  const jar = new Map();
   async function request(urlPath, options = {}) {
-    const headers = { ...(options.headers || {}) };
-    if (jar.size) headers.Cookie = [...jar].map(([key, value]) => `${key}=${value}`).join('; ');
-    const response = await fetch(`${origin}${urlPath}`, { ...options, headers, redirect: 'manual' });
-    for (const line of response.headers.getSetCookie?.() || []) {
-      const pair = line.split(';')[0];
-      const index = pair.indexOf('=');
-      jar.set(pair.slice(0, index), pair.slice(index + 1));
-      if (line.includes('llm_session=')) assert.match(line, /Path=\/how-LLM-works\//);
-    }
+    const response = await fetch(`${origin}${urlPath}`, { ...options, redirect: 'manual' });
+    assert.deepEqual(response.headers.getSetCookie?.() || [], [], urlPath);
     return response;
+  }
+  function assertIsolated(response) {
+    assert.equal(response.headers.get('cross-origin-opener-policy'), 'same-origin');
+    assert.equal(response.headers.get('cross-origin-embedder-policy'), 'require-corp');
+    assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin');
   }
 
   const slash = await request(`${base}?from=root`);
@@ -117,45 +114,55 @@ test('prefixed server, auth, assets, nested routes, and proxy behavior', { timeo
 
   const health = await request(`${base}/health`);
   assert.equal(health.status, 200);
-  assert.equal((await health.json()).basePath, base);
-  assert.equal(health.headers.get('cross-origin-embedder-policy'), 'require-corp');
+  const healthBody = await health.json();
+  assert.equal(healthBody.basePath, base);
+  assert.equal(healthBody.authRequired, false);
+  assert.equal(healthBody.modelLocal, false);
+  assertIsolated(health);
 
   for (const blocked of ['/health', '/assets/index-DTXKgRpf.css', '/api/auth/session', '/api/model/config.json', '/how-llm-works/health', '/how-image-models-work/', '/mlx-core.opt.wasm']) {
     const response = await request(blocked);
     assert.equal(response.status, 404, blocked);
   }
 
-  const loginRedirect = await request(`${base}/zh/chapters/tokenization/`);
-  assert.equal(loginRedirect.status, 302);
-  const loginLocation = loginRedirect.headers.get('location');
-  assert.equal(loginLocation, `${base}/auth/login?next=${encodeURIComponent(`${base}/zh/chapters/tokenization/`)}`);
+  const home = await request(`${base}/`);
+  const homeHtml = await home.text();
+  assert.equal(home.status, 200);
+  assert.equal(home.headers.get('location'), null);
+  assert.match(homeHtml, /id="root"/);
+  assert.doesNotMatch(homeHtml, /account-client\.js/);
+  assert.doesNotMatch(homeHtml, /\/auth\/login/);
+  assertIsolated(home);
 
-  const registerPage = await request(`${base}/auth/register`);
-  const registerHtml = await registerPage.text();
-  assert.equal(registerPage.status, 200);
-  assert.match(registerHtml, /const base="\/how-LLM-works"/);
-  assert.match(registerHtml, /src="\/how-LLM-works\/auth\.js"/);
-  assert.doesNotMatch(registerHtml, /\ssrc="\/auth\.js"/);
+  const nested = await request(`${base}/zh/chapters/tokenization/`);
+  assert.equal(nested.status, 200);
+  assert.equal(nested.headers.get('location'), null);
+  assert.match(await nested.text(), /id="root"/);
 
-  const session = await request(`${base}/api/auth/session`);
-  assert.equal(session.status, 200);
-  const { csrfToken } = await session.json();
-  assert.equal(typeof csrfToken, 'string');
-  const email = `prefix-${Date.now()}@example.com`;
-  const password = 'prefix-pass-1';
-  const authHeaders = {
-    'Content-Type': 'application/json',
-    Origin: origin,
-    'X-CSRF-Token': csrfToken,
-  };
-  const registered = await request(`${base}/api/auth/register`, {
-    method: 'POST', headers: authHeaders, body: JSON.stringify({ name: 'Prefix', email, password }),
-  });
-  assert.equal(registered.status, 201);
-  const loggedIn = await request(`${base}/api/auth/login`, {
-    method: 'POST', headers: authHeaders, body: JSON.stringify({ email, password }),
-  });
-  assert.equal(loggedIn.status, 200);
+  const legacy = await request(`${base}/auth/login?next=https://evil.example/phish`);
+  assert.equal(legacy.status, 302);
+  assert.equal(legacy.headers.get('location'), `${base}/zh/chapters/overview`);
+  assert.doesNotMatch(await legacy.text(), /auth-form|password|邮箱/);
+  for (const retired of [`${base}/auth/register`, `${base}/account`, `${base}/auth/login/`]) {
+    const response = await request(retired);
+    assert.equal(response.status, 302, retired);
+    assert.equal(response.headers.get('location'), `${base}/zh/chapters/overview`);
+    await response.arrayBuffer();
+  }
+  const secretEmail = 'hidden-user@example.com';
+  for (const route of ['session', 'register', 'login', 'logout']) {
+    const response = await request(`${base}/api/auth/${route}`, {
+      method: route === 'session' ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: origin, Cookie: 'llm_session=ab'.repeat(4) },
+      body: route === 'session' ? undefined : JSON.stringify({ name: 'Hidden', email: secretEmail, password: 'prefix-pass-1' }),
+    });
+    assert.equal(response.status, 404, route);
+    const body = await response.text();
+    assert.equal(body, '{"error":"not_found"}');
+    assert.equal(body.includes(secretEmail), false);
+    assert.equal(body.includes('users'), false);
+  }
+  assert.equal(fs.existsSync(path.join(data, 'auth.sqlite')), false);
 
   const chapter = await request(`${base}/zh/chapters/tokenization`);
   const chapterHtml = await chapter.text();
@@ -167,6 +174,8 @@ test('prefixed server, auth, assets, nested routes, and proxy behavior', { timeo
   assert.doesNotMatch(chapterHtml, /\ssrc="\/assets\//);
   assert.doesNotMatch(chapterHtml, /\shref="\/assets\//);
   assert.doesNotMatch(chapterHtml, /\shref="\/zh\//);
+  assert.doesNotMatch(chapterHtml, /account-client\.js|\/auth\/login/);
+  assertIsolated(chapter);
 
   const refreshed = await request(`${base}/zh/chapters/overview/`);
   assert.equal(refreshed.status, 200);
@@ -193,6 +202,7 @@ test('prefixed server, auth, assets, nested routes, and proxy behavior', { timeo
 
   const worker = await request(`${base}/worker/mlx-worker-D0oSVjKz.js`);
   assert.equal(worker.status, 200);
+  assertIsolated(worker);
   assert.match(await worker.text(), /function En\(e\)/);
 
   const model = await request(`${base}/api/model/config.json`);
@@ -206,17 +216,15 @@ test('prefixed server, auth, assets, nested routes, and proxy behavior', { timeo
   const wasm = await request(`${base}/mlx-core.opt.wasm`, { headers: { Range: 'bytes=0-15' } });
   assert.equal(wasm.status, 206);
   assert.equal(wasm.headers.get('content-type'), 'application/wasm');
+  assert.equal(wasm.headers.get('accept-ranges'), 'bytes');
   assert.equal(Number(wasm.headers.get('content-length')), 16);
+  assertIsolated(wasm);
   await wasm.arrayBuffer();
 
   const escaped = await request(`${base}/assets/../server.mjs`);
   assert.notEqual(escaped.status, 200);
   const escapedText = await escaped.text();
   assert.equal(escapedText.includes('createAuth'), false);
-
-  const account = await request(`${base}/account`);
-  assert.equal(account.status, 200);
-  assert.match(await account.text(), /id="auth-form"|id="account-details"/);
 
   const retainPort = await freePort();
   const stripPort = await freePort();
@@ -232,7 +240,7 @@ test('prefixed server, auth, assets, nested routes, and proxy behavior', { timeo
   assert.equal(ignored.status, 404);
   assert.equal(await ignored.text(), 'proxy-miss');
 
-  await exerciseBrowser(origin, email, password);
+  await exerciseBrowser(origin);
 });
 
 test('root mode still serves the local entry path', async t => {
@@ -247,9 +255,45 @@ test('root mode still serves the local entry path', async t => {
   const health = await fetch(`http://127.0.0.1:${port}/health`);
   assert.equal(health.status, 200);
   assert.equal((await health.json()).basePath, '/');
-  const redirect = await fetch(`http://127.0.0.1:${port}/zh/chapters/overview`, { redirect: 'manual' });
-  assert.equal(redirect.status, 302);
-  assert.match(redirect.headers.get('location'), /^\/auth\/login\?next=/);
+  const page = await fetch(`http://127.0.0.1:${port}/zh/chapters/overview`, { redirect: 'manual' });
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get('location'), null);
+  assert.deepEqual(page.headers.getSetCookie?.() || [], []);
+  assert.match(await page.text(), /id="root"/);
+});
+
+test('REQUIRE_AUTH=1 keeps the login gate and does not open account mutations', async t => {
+  const port = await freePort();
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'llm-auth-'));
+  const server = startServer({
+    PORT: String(port), BASE_PATH: base, AUTH_DATA_DIR: data, REQUIRE_AUTH: '1',
+  });
+  t.after(async () => {
+    await server.stop();
+    fs.rmSync(data, { recursive: true, force: true });
+  });
+  await server.ready;
+  const origin = `http://127.0.0.1:${port}`;
+  const chapter = await fetch(`${origin}${base}/zh/chapters/overview`, { redirect: 'manual' });
+  assert.equal(chapter.status, 302);
+  assert.match(chapter.headers.get('location'), new RegExp(`^${base}/auth/login\\?next=`));
+  const asset = await fetch(`${origin}${base}/assets/index-DTXKgRpf.css`, { redirect: 'manual' });
+  assert.equal(asset.status, 401);
+  const session = await fetch(`${origin}${base}/api/auth/session`, { redirect: 'manual' });
+  assert.equal(session.status, 200);
+  const opened = await session.json();
+  assert.equal(opened.user, null);
+  assert.equal(typeof opened.csrfToken, 'string');
+  const cookies = session.headers.getSetCookie?.() || [];
+  assert.equal(cookies.some(line => line.startsWith('llm_csrf=')), true);
+  assert.equal(JSON.stringify(opened).includes('@'), false);
+  const rejected = await fetch(`${origin}${base}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: origin },
+    body: JSON.stringify({ name: 'Nope', email: 'nope@example.com', password: 'prefix-pass-1' }),
+  });
+  assert.equal(rejected.status, 403);
+  assert.equal((await rejected.json()).error, 'csrf_failed');
 });
 
 function proxy(listenPort, upstreamPort, strip) {
@@ -276,7 +320,7 @@ function once(emitter, event) {
   return new Promise(resolve => emitter.once(event, resolve));
 }
 
-async function exerciseBrowser(origin, email, password) {
+async function exerciseBrowser(origin) {
   const debugPort = await freePort();
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'llm-chrome-'));
   const chrome = spawn('google-chrome', [
@@ -303,26 +347,9 @@ async function exerciseBrowser(origin, email, password) {
       }
     });
 
-    await navigate(browser, sessionId, `${origin}${base}/auth/register`);
-    await waitFor(async () => browser.eval(sessionId, 'document.getElementById("submit-button") && !document.getElementById("submit-button").disabled'), 15000);
-    await browser.eval(sessionId, `(() => {
-      const set = (id, value) => { const el = document.getElementById(id); el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
-      set('name', 'Browser');
-      set('email', ${JSON.stringify(`browser-${Date.now()}@example.com`)});
-      set('password', ${JSON.stringify(password)});
-      set('confirm-password', ${JSON.stringify(password)});
-      document.getElementById('submit-button').click();
-      return true;
-    })()`);
-    await waitFor(async () => (await browser.eval(sessionId, 'location.pathname')).includes('/auth/login'), 15000);
-    await waitFor(async () => browser.eval(sessionId, 'document.getElementById("submit-button") && !document.getElementById("submit-button").disabled'), 15000);
-    await browser.eval(sessionId, `(() => {
-      document.getElementById('email').value = ${JSON.stringify(email)};
-      document.getElementById('password').value = ${JSON.stringify(password)};
-      document.getElementById('submit-button').click();
-      return location.pathname;
-    })()`);
+    await navigate(browser, sessionId, `${origin}${base}/zh/chapters/overview`);
     await waitFor(async () => (await browser.eval(sessionId, 'location.pathname')).startsWith(`${base}/zh/`), 20000);
+    assert.equal(await browser.eval(sessionId, 'location.pathname.includes("/auth/")'), false);
     await waitFor(async () => browser.eval(sessionId, `(() => {
       const slider = document.querySelector('input[type=range]');
       if (!slider) return false;

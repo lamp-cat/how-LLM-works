@@ -1,3 +1,4 @@
+if (globalThis.__HOW_LLMS_AUTH__ === true) {
 const base = (globalThis.__HOW_LLMS_BASE__ || '').replace(/\/+$/, '');
 function withBase(urlPath) {
   if (!base || !urlPath.startsWith('/') || urlPath.startsWith('//') || urlPath === base || urlPath.startsWith(`${base}/`)) return urlPath;
@@ -49,3 +50,4 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 window.addEventListener('storage', event => { if (event.key === 'llm:auth-change') check(); });
 setInterval(check, 60000);
 check();
+}

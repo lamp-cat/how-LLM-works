@@ -18,6 +18,7 @@ ENV NODE_ENV=production \
     PORT=8080 \
     BASE_PATH=/how-LLM-works \
     AUTH_DATA_DIR=/data \
+    REQUIRE_AUTH=0 \
     ALLOW_UPSTREAM_MODEL=0 \
     TRUST_PROXY=1
 
