@@ -106,7 +106,15 @@ function proxyModel(req, res, modelPath, redirects = 0, target) {
   upstream.end();
 }
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer((req, res) => {
+  dispatch(req, res).catch(err => {
+    if (res.headersSent) return res.destroy();
+    const missing = err && (err.code === 'ENOENT' || err.code === 'ENOTDIR');
+    console.error(missing ? `Static file missing: ${err.message}` : `Request failed: ${err && err.message}`);
+    error(res, missing ? 404 : 500, missing ? 'Not found' : 'Request failed');
+  });
+});
+async function dispatch(req, res) {
   headers(res);
   let requestUrl;
   try { requestUrl = new URL(req.url, 'http://localhost'); }
@@ -148,7 +156,14 @@ const server = http.createServer(async (req, res) => {
   };
   if (publicFiles[stripped]) {
     const file = path.join(root, publicFiles[stripped]);
-    return serveFile(req, res, file, await fs.promises.stat(file));
+    let stat;
+    try { stat = await fs.promises.stat(file); }
+    catch (err) {
+      if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return error(res, 404, 'Not found');
+      throw err;
+    }
+    if (!stat.isFile()) return error(res, 404, 'Not found');
+    return serveFile(req, res, file, stat);
   }
   if (['/auth/login', '/auth/register'].includes(stripped)) {
     const file = path.join(root, 'auth-ui/auth.html');
@@ -201,7 +216,7 @@ const server = http.createServer(async (req, res) => {
   if (path.extname(stripped)) return error(res, 404, 'Asset not found');
   try { await serveHtml(req, res, path.join(root, 'index.html')); }
   catch { error(res, 503, 'Runtime files are not ready'); }
-});
+}
 server.listen(port, host, () => {
   const origin = `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`;
   console.log(`How LLMs Work: ${origin}${courseEntry}`);

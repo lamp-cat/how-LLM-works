@@ -23,9 +23,9 @@ function freePort() {
   });
 }
 
-function startServer(env) {
+function startServer(env, cwd = here) {
   const child = spawn(process.execPath, ['server.mjs'], {
-    cwd: here,
+    cwd,
     env: { ...process.env, HOST: '127.0.0.1', ALLOW_UPSTREAM_MODEL: '0', PUBLIC_ORIGIN: '', TRUST_PROXY: '', REQUIRE_AUTH: '', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -85,6 +85,92 @@ test('base path helper keeps the exact segment', () => {
   }), '203.0.113.9');
   if (previous === undefined) delete process.env.TRUST_PROXY;
   else process.env.TRUST_PROXY = previous;
+});
+
+test('Dockerfile copies the portal files into the image root', () => {
+  const docker = fs.readFileSync(path.join(here, '..', 'Dockerfile'), 'utf8');
+  assert.match(docker, /COPY how-llms-work\/course-portal\.js how-llms-work\/course-portal\.css \.\//);
+});
+
+function materializeImageRoot(dest) {
+  const repo = path.join(here, '..');
+  const docker = fs.readFileSync(path.join(repo, 'Dockerfile'), 'utf8');
+  for (const match of docker.matchAll(/^COPY\s+(.+)$/gm)) {
+    const parts = match[1].trim().split(/\s+/);
+    const target = parts.pop();
+    const destPath = path.resolve(dest, target === './' ? '.' : target);
+    if (parts.length > 1) {
+      fs.mkdirSync(destPath, { recursive: true });
+      for (const source of parts) fs.cpSync(path.join(repo, source), path.join(destPath, path.basename(source)), { recursive: true });
+    } else {
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.cpSync(path.join(repo, parts[0]), destPath, { recursive: true });
+    }
+  }
+}
+
+test('Dockerfile copy layout serves portal files from the image root', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'llm-image-root-'));
+  materializeImageRoot(dir);
+  for (const name of ['course-portal.js', 'course-portal.css', 'server.mjs', 'index.html']) {
+    assert.equal(fs.existsSync(path.join(dir, name)), true, name);
+  }
+  const port = await freePort();
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'llm-image-data-'));
+  const server = startServer({ PORT: String(port), BASE_PATH: base, AUTH_DATA_DIR: data, ALLOW_UPSTREAM_MODEL: '0' }, dir);
+  t.after(async () => {
+    await server.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(data, { recursive: true, force: true });
+  });
+  await server.ready;
+  const origin = `http://127.0.0.1:${port}`;
+  const zh = await fetch(`${origin}${base}/zh`);
+  const html = await zh.text();
+  assert.equal(zh.status, 200);
+  assert.match(html, /\/how-LLM-works\/course-portal\.js/);
+  assert.match(html, /\/how-LLM-works\/course-portal\.css/);
+  const css = await fetch(`${origin}${base}/course-portal.css`);
+  assert.equal(css.status, 200);
+  assert.match(await css.text(), /\.course-portal/);
+  const script = await fetch(`${origin}${base}/course-portal.js`);
+  assert.equal(script.status, 200);
+  assert.match(await script.text(), /\/how-image-models-work\//);
+  const chapter = await fetch(`${origin}${base}/zh/chapters/overview`);
+  assert.equal(chapter.status, 200);
+  const health = await fetch(`${origin}${base}/health`);
+  const body = await health.json();
+  assert.equal(body.authRequired, false);
+  assert.equal(body.modelLocal, false);
+  assert.equal(fs.existsSync(path.join(data, 'auth.sqlite')), false);
+});
+
+test('a missing public file is a 404 and the process stays up', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'llm-missing-'));
+  for (const name of ['server.mjs', 'auth.mjs', 'base-path.mjs', 'index.html', 'course-portal.js']) {
+    fs.copyFileSync(path.join(here, name), path.join(dir, name));
+  }
+  const port = await freePort();
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'llm-missing-data-'));
+  const server = startServer({ PORT: String(port), BASE_PATH: base, AUTH_DATA_DIR: data }, dir);
+  t.after(async () => {
+    assert.equal(server.child.exitCode, null);
+    await server.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(data, { recursive: true, force: true });
+  });
+  await server.ready;
+  const origin = `http://127.0.0.1:${port}`;
+  const css = await fetch(`${origin}${base}/course-portal.css`);
+  assert.equal(css.status, 404);
+  assert.equal(await css.text(), 'Not found');
+  const zh = await fetch(`${origin}${base}/zh`);
+  assert.equal(zh.status, 200);
+  assert.match(await zh.text(), /course-portal\.css/);
+  const health = await fetch(`${origin}${base}/health`);
+  assert.equal(health.status, 200);
+  assert.equal((await health.json()).status, 'ok');
+  assert.equal(server.child.exitCode, null);
 });
 
 test('public prefixed course, assets, and retired auth routes', { timeout: 180000 }, async t => {

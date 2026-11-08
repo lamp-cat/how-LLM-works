@@ -5,6 +5,7 @@ FROM node:22-bookworm-slim
 WORKDIR /app
 
 COPY how-llms-work/package.json how-llms-work/server.mjs how-llms-work/auth.mjs how-llms-work/base-path.mjs ./
+COPY how-llms-work/course-portal.js how-llms-work/course-portal.css ./
 COPY how-llms-work/auth-ui ./auth-ui
 COPY how-llms-work/index.html ./index.html
 COPY how-llms-work/assets ./assets
