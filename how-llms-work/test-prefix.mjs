@@ -125,6 +125,31 @@ test('public prefixed course, assets, and retired auth routes', { timeout: 18000
     assert.equal(response.status, 404, blocked);
   }
 
+  const zhHome = await request(`${base}/zh`);
+  const zhHtml = await zhHome.text();
+  assert.equal(zhHome.status, 200);
+  assert.equal(zhHome.headers.get('location'), null);
+  assert.match(zhHtml, /src="\/how-LLM-works\/course-portal\.js"/);
+  assert.match(zhHtml, /href="\/how-LLM-works\/course-portal\.css"/);
+  assert.doesNotMatch(zhHtml, /account-client\.js|\/auth\/login/);
+  assertIsolated(zhHome);
+  const portalJs = await request(`${base}/course-portal.js`);
+  assert.equal(portalJs.status, 200);
+  assert.match(portalJs.headers.get('content-type'), /javascript/);
+  assertIsolated(portalJs);
+  assert.match(await portalJs.text(), /图像模型是如何运作的/);
+  const portalCss = await request(`${base}/course-portal.css`);
+  assert.equal(portalCss.status, 200);
+  assert.match(portalCss.headers.get('content-type'), /css/);
+  assertIsolated(portalCss);
+  await portalCss.arrayBuffer();
+  for (const outside of ['/learn/', '/how-image-models-work/', '/how-image-models-work']) {
+    const response = await request(outside);
+    assert.equal(response.status, 404, outside);
+    assert.equal(response.headers.get('location'), null);
+    await response.arrayBuffer();
+  }
+
   const home = await request(`${base}/`);
   const homeHtml = await home.text();
   assert.equal(home.status, 200);
@@ -141,12 +166,12 @@ test('public prefixed course, assets, and retired auth routes', { timeout: 18000
 
   const legacy = await request(`${base}/auth/login?next=https://evil.example/phish`);
   assert.equal(legacy.status, 302);
-  assert.equal(legacy.headers.get('location'), `${base}/zh/chapters/overview`);
+  assert.equal(legacy.headers.get('location'), `${base}/zh`);
   assert.doesNotMatch(await legacy.text(), /auth-form|password|邮箱/);
   for (const retired of [`${base}/auth/register`, `${base}/account`, `${base}/auth/login/`]) {
     const response = await request(retired);
     assert.equal(response.status, 302, retired);
-    assert.equal(response.headers.get('location'), `${base}/zh/chapters/overview`);
+    assert.equal(response.headers.get('location'), `${base}/zh`);
     await response.arrayBuffer();
   }
   const secretEmail = 'hidden-user@example.com';
@@ -347,8 +372,42 @@ async function exerciseBrowser(origin) {
       }
     });
 
+    await browser.send('Emulation.setDeviceMetricsOverride', {
+      width: 1280, height: 800, deviceScaleFactor: 1, mobile: false,
+    }, sessionId);
+    await navigate(browser, sessionId, `${origin}${base}/zh`);
+    await waitFor(async () => browser.eval(sessionId, `(() => {
+      const link = document.querySelector('a[data-course-portal]');
+      return !!link && document.body.innerText.includes('LLM 是如何');
+    })()`), 20000);
+    const desktopPortal = await browser.eval(sessionId, `(() => {
+      const link = document.querySelector('a[data-course-portal]');
+      const rect = link.getBoundingClientRect();
+      return { href: link.getAttribute('href'), text: link.innerText, top: rect.top, height: rect.height, visible: rect.width > 40 && rect.top >= 0 && rect.bottom <= innerHeight };
+    })()`);
+    assert.equal(desktopPortal.href, '/how-image-models-work/');
+    assert.match(desktopPortal.text, /图像模型是如何运作的/);
+    assert.equal(desktopPortal.visible, true, JSON.stringify(desktopPortal));
+    await saveShot(browser, sessionId, '/opt/cursor/artifacts/zh-home-desktop.png');
+    await browser.send('Emulation.setDeviceMetricsOverride', {
+      width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
+    }, sessionId);
+    await waitFor(async () => browser.eval(sessionId, `(() => {
+      const link = document.querySelector('a[data-course-portal]');
+      if (!link) return false;
+      const rect = link.getBoundingClientRect();
+      return rect.width > 40 && rect.top >= 0 && rect.bottom <= innerHeight;
+    })()`), 5000);
+    await saveShot(browser, sessionId, '/opt/cursor/artifacts/zh-home-mobile.png');
+    await browser.eval(sessionId, `document.querySelector('a[data-course-portal]').click()`);
+    await waitFor(async () => (await browser.eval(sessionId, 'location.pathname')) === '/how-image-models-work/', 10000);
+    assert.equal(await browser.eval(sessionId, 'location.pathname'), '/how-image-models-work/');
+    await browser.send('Emulation.setDeviceMetricsOverride', {
+      width: 1280, height: 800, deviceScaleFactor: 1, mobile: false,
+    }, sessionId);
     await navigate(browser, sessionId, `${origin}${base}/zh/chapters/overview`);
-    await waitFor(async () => (await browser.eval(sessionId, 'location.pathname')).startsWith(`${base}/zh/`), 20000);
+    await waitFor(async () => (await browser.eval(sessionId, 'location.pathname')) === `${base}/zh/chapters/overview`, 20000);
+    assert.equal(await browser.eval(sessionId, 'document.querySelector("a[data-course-portal]")'), null);
     assert.equal(await browser.eval(sessionId, 'location.pathname.includes("/auth/")'), false);
     await waitFor(async () => browser.eval(sessionId, `(() => {
       const slider = document.querySelector('input[type=range]');
@@ -402,10 +461,12 @@ async function exerciseBrowser(origin) {
       if (!url.startsWith(origin)) return false;
       const pathname = new URL(url).pathname;
       if (pathname === '/favicon.ico') return false;
+      if (pathname === '/how-image-models-work' || pathname.startsWith('/how-image-models-work/')) return false;
       if (pathname === base || pathname.startsWith(`${base}/`)) return false;
       return true;
     });
     assert.deepEqual(bad, []);
+    assert.ok(requests.some(url => new URL(url).pathname === '/how-image-models-work/'));
     const favicon = await fetch(`${origin}/favicon.ico`);
     assert.equal(favicon.status, 404);
     assert.ok(requests.some(url => new URL(url).pathname.startsWith(`${base}/assets/`) && url.includes('KaTeX')));
@@ -429,6 +490,12 @@ async function exerciseBrowser(origin) {
       }
     }
   }
+}
+
+async function saveShot(browser, sessionId, file) {
+  const shot = await browser.send('Page.captureScreenshot', { format: 'png' }, sessionId);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
 }
 
 async function navigate(browser, sessionId, url) {

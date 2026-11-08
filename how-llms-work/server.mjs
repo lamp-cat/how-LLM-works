@@ -14,7 +14,7 @@ const auth = requireAuth ? createAuth() : null;
 const port = Number(process.env.PORT || 5173);
 const host = process.env.HOST || '127.0.0.1';
 const basePath = normalizeBasePath();
-const courseEntry = withBasePath('/zh/chapters/overview', basePath);
+const courseEntry = withBasePath('/zh', basePath);
 const allowUpstreamModel = process.env.ALLOW_UPSTREAM_MODEL !== '0';
 const modelRoot = path.resolve(process.env.MODEL_DIR || path.join(root, 'model'));
 const mime = {
@@ -66,12 +66,13 @@ function rewriteHtml(html) {
   if (!requireAuth) out = out.replace(/\s*<script type="module" src="\/account-client\.js"><\/script>/g, '');
   const flag = requireAuth ? '<script>globalThis.__HOW_LLMS_AUTH__=true;</script>' : '';
   const boot = basePath
-    ? `<script>(function(){const base=${JSON.stringify(basePath)};globalThis.__HOW_LLMS_BASE__=base;const fix=el=>{if(!el||el.nodeType!==1)return;for(const attr of["href","src","action"]){if(!el.hasAttribute(attr))continue;const value=el.getAttribute(attr);if(!value||value[0]!=="/"||value[1]==="/"||value===base||value.startsWith(base+"/"))continue;el.setAttribute(attr,base+value);}};const walk=node=>{if(!node||node.nodeType!==1)return;fix(node);node.querySelectorAll("[href],[src],[action]").forEach(fix);};new MutationObserver(records=>{for(const record of records){if(record.type==="attributes")fix(record.target);for(const node of record.addedNodes)walk(node);}}).observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["href","src","action"]});document.addEventListener("click",event=>{const el=event.target&&event.target.closest&&event.target.closest("a[href],area[href]");if(el)fix(el);},true);walk(document.documentElement);})();</script>`
+    ? `<script>(function(){const base=${JSON.stringify(basePath)};globalThis.__HOW_LLMS_BASE__=base;const outside=value=>value==="/how-image-models-work"||value.startsWith("/how-image-models-work/")||value.startsWith("/how-image-models-work?");const fix=el=>{if(!el||el.nodeType!==1)return;for(const attr of["href","src","action"]){if(!el.hasAttribute(attr))continue;const value=el.getAttribute(attr);if(!value||value[0]!=="/"||value[1]==="/"||value===base||value.startsWith(base+"/")||outside(value))continue;el.setAttribute(attr,base+value);}};const walk=node=>{if(!node||node.nodeType!==1)return;fix(node);node.querySelectorAll("[href],[src],[action]").forEach(fix);};new MutationObserver(records=>{for(const record of records){if(record.type==="attributes")fix(record.target);for(const node of record.addedNodes)walk(node);}}).observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["href","src","action"]});document.addEventListener("click",event=>{const el=event.target&&event.target.closest&&event.target.closest("a[href],area[href]");if(el)fix(el);},true);walk(document.documentElement);})();</script>`
     : '';
   const icon = basePath ? '<link rel="icon" href="data:,">' : '';
-  if (flag || boot || icon) out = out.replace(/<head[^>]*>/i, match => `${match}${icon}${flag}${boot}`);
+  const portal = '<link rel="stylesheet" href="/course-portal.css"><script src="/course-portal.js"></script>';
+  out = out.replace(/<head[^>]*>/i, match => `${match}${icon}${flag}${boot}${portal}`);
   if (!basePath) return out;
-  return out.replace(/(\s(?:href|src|action)=["'])\/(?!\/)/g, `$1${basePath}/`);
+  return out.replace(/(\s(?:href|src|action)=["'])\/(?!\/|how-image-models-work(?:[/?#"]|$))/g, `$1${basePath}/`);
 }
 async function serveHtml(req, res, file) {
   const body = Buffer.from(rewriteHtml(await fs.promises.readFile(file, 'utf8')));
@@ -142,6 +143,8 @@ const server = http.createServer(async (req, res) => {
     '/auth.css': 'auth-ui/auth.css',
     '/auth.js': 'auth-ui/auth.js',
     '/account-client.js': 'auth-ui/account-client.js',
+    '/course-portal.js': 'course-portal.js',
+    '/course-portal.css': 'course-portal.css',
   };
   if (publicFiles[stripped]) {
     const file = path.join(root, publicFiles[stripped]);
@@ -201,7 +204,7 @@ const server = http.createServer(async (req, res) => {
 });
 server.listen(port, host, () => {
   const origin = `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`;
-  console.log(`How LLMs Work: ${origin}${withBasePath('/zh/chapters/overview', basePath)}`);
+  console.log(`How LLMs Work: ${origin}${courseEntry}`);
   console.log(`Model directory: ${modelRoot}`);
   if (requireAuth && basePath && !process.env.PUBLIC_ORIGIN) {
     console.warn('PUBLIC_ORIGIN is unset. Behind TLS set PUBLIC_ORIGIN=https://api.garryai.icu so session cookies are Secure and login checks match the browser origin.');

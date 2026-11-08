@@ -1,0 +1,79 @@
+.course-portal {
+  box-sizing: border-box;
+  width: min(100%, 28rem);
+  margin: 0 0 22px;
+  padding: 12px 14px 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  text-decoration: none;
+  color: var(--text, #ece4da);
+  background:
+    linear-gradient(100deg, #f4c8d724, #8884f61f 55%, #bad4e814),
+    #0f0d11c7;
+  border: 1px solid #f4c8d76b;
+  border-radius: 18px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px #ece4da24, 0 16px 40px #00000073;
+}
+
+.course-portal:hover {
+  border-color: var(--book-pink, #f4c8d7);
+  background:
+    linear-gradient(100deg, #f4c8d738, #8884f62b 55%, #bad4e81f),
+    #16131ad9;
+}
+
+.course-portal:focus-visible {
+  outline: 2px solid var(--book-pink, #f4c8d7);
+  outline-offset: 3px;
+}
+
+.course-portal-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.course-portal-kicker {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--book-pink, #f4c8d7);
+}
+
+.course-portal-title {
+  font-family: var(--font-display, "Iowan Old Style", Palatino, serif);
+  font-size: clamp(1.05rem, 2.7vw, 1.28rem);
+  font-weight: 400;
+  line-height: 1.25;
+  text-shadow: 0 1px 10px #000000bf;
+}
+
+.course-portal-go {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--book-pink, #f4c8d7);
+  color: var(--bg, #0f0d11);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+@media (max-width: 640px) {
+  .course-portal {
+    width: 100%;
+    margin-bottom: 18px;
+    padding: 13px 12px 13px 14px;
+    border-radius: 16px;
+  }
+}
