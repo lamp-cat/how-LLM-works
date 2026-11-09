@@ -1,6 +1,29 @@
-// Shows the image-course entry only on the Chinese LLM landing page.
+// Chinese landing only: image-course entry and the reading-room presentation.
 (function () {
   const imageCourse = '/how-image-models-work/';
+  const mascotSrc = value => /tool_text_to_image|capybara/i.test(String(value || ''));
+  const nativeCreate = Document.prototype.createElement;
+  const srcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+  Document.prototype.createElement = function (name, options) {
+    const el = nativeCreate.call(this, name, options);
+    if (!srcDesc || String(name).toLowerCase() !== 'img') return el;
+    const setAttr = el.setAttribute;
+    Object.defineProperty(el, 'src', {
+      configurable: true,
+      enumerable: true,
+      get() { return srcDesc.get.call(el); },
+      set(value) {
+        if (mascotSrc(value)) return;
+        srcDesc.set.call(el, value);
+      },
+    });
+    el.setAttribute = function (attr, value) {
+      if (String(attr).toLowerCase() === 'src' && mascotSrc(value)) return;
+      return setAttr.call(this, attr, value);
+    };
+    return el;
+  };
+
   document.addEventListener('click', event => {
     const link = event.target && event.target.closest && event.target.closest('a[data-course-portal]');
     if (!link) return;
@@ -16,7 +39,8 @@
   }
 
   function sync() {
-    const home = barePath() === '/zh';
+    const home = barePath() === '/zh' && !!document.querySelector('.landing-content');
+    document.documentElement.classList.toggle('zh-entry', home);
     const existing = document.querySelector('a[data-course-portal]');
     const host = home ? document.querySelector('.landing-content') : null;
     if (!home || !host) {

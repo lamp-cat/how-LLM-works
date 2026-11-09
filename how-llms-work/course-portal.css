@@ -1,79 +1,409 @@
-.course-portal {
+/* Reading room for the Chinese landing only. Chapter pages do not get .zh-entry. */
+
+html.zh-entry {
+  color-scheme: light;
+  background: #f3eee4;
+}
+
+html.zh-entry body {
+  background: #f3eee4;
+  color: #1c1915;
+}
+
+html.zh-entry .overlay-screen {
+  display: block;
+  overflow: auto;
+  background:
+    linear-gradient(#1f4b3c, #1f4b3c) left / 8px 100% no-repeat,
+    #f3eee4;
+  color: #1c1915;
+}
+
+html.zh-entry .landing-bg-canvas,
+html.zh-entry img.landing-mascot {
+  display: none !important;
+}
+
+html.zh-entry .landing-content {
+  z-index: 1;
   box-sizing: border-box;
-  width: min(100%, 28rem);
-  margin: 0 0 22px;
-  padding: 12px 14px 12px 16px;
+  width: min(1040px, calc(100% - 4.5rem));
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 4.6rem 0 5.2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.28fr) minmax(17.5rem, 0.72fr);
+  column-gap: 2.5rem;
+  row-gap: 0.85rem;
+  align-items: start;
+  justify-content: stretch;
+  text-align: left;
+}
+
+html.zh-entry .landing-content::before {
+  content: none;
+}
+
+html.zh-entry .landing-content::after {
+  content: "";
+  grid-column: 2;
+  grid-row: 2 / 6;
+  background: #fbf8f2;
+  border: 1px solid #ddd4c6;
+  border-top: 3px solid #1f4b3c;
+  pointer-events: none;
+}
+
+html.zh-entry .landing-tag {
+  grid-area: 1 / 1;
+  justify-self: start;
+  margin: 0 0 0.2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #1f4b3c;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+}
+
+html.zh-entry .landing-tag::before {
+  background: #1f4b3c;
+  box-shadow: none;
+}
+
+html.zh-entry .landing-title {
+  grid-area: 2 / 1;
+  margin: 0;
+  max-width: 11em;
+  color: #1c1915;
+  text-align: left;
+  text-shadow: none;
+  font-size: clamp(2.7rem, 4.6vw, 4.35rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+html.zh-entry .landing-title em {
+  color: #8f3b2e;
+  font-style: italic;
+}
+
+html.zh-entry .landing-sub {
+  grid-area: 3 / 1;
+  max-width: 38rem;
+  margin: 0;
+  color: #3f3a33;
+  text-align: left;
+  text-shadow: none;
+  font-size: 1.02rem;
+  line-height: 1.65;
+}
+
+html.zh-entry .landing-sub code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.86em;
+  color: #1c1915;
+  background: #e7e0d2;
+  padding: 0.05em 0.28em;
+}
+
+html.zh-entry .landing-specs {
+  grid-area: 4 / 1;
+  justify-content: flex-start;
+  gap: 1.1rem 1.6rem;
+  margin: 0.35rem 0 0;
+}
+
+html.zh-entry .spec {
+  text-align: left;
+  min-width: 0;
+}
+
+html.zh-entry .spec-value,
+html.zh-entry .spec-label {
+  text-shadow: none;
+}
+
+html.zh-entry .spec-value {
+  color: #1c1915;
+  font-size: 0.95rem;
+}
+
+html.zh-entry .spec-label {
+  color: #6b645a;
+  letter-spacing: 0.08em;
+}
+
+html.zh-entry .landing-void-ad {
+  grid-area: 5 / 1;
+  align-self: end;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.75rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.35rem 0.7rem;
+  color: #5c564c;
+  text-shadow: none;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #ddd4c6;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html.zh-entry .landing-void-eyebrow,
+html.zh-entry .landing-void-mark,
+html.zh-entry .landing-void-copy {
+  color: #5c564c;
+  text-shadow: none;
+  line-height: 1.4;
+}
+
+html.zh-entry .landing-void-mark::before {
+  background: #1f4b3c;
+  box-shadow: none;
+}
+
+html.zh-entry .btn-start-learning {
+  grid-area: 2 / 2;
+  z-index: 1;
+  align-self: end;
+  width: auto;
+  margin: 1rem 1rem 0;
+  padding: 0.95rem 1rem;
+  text-align: left;
+  color: #f6f1e6;
+  background: #1f4b3c;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+  font-size: 1.02rem;
+  letter-spacing: 0.01em;
+}
+
+html.zh-entry .btn-start-learning:hover {
+  background: #17382c;
+  border-color: transparent;
+  transform: none;
+}
+
+html.zh-entry .course-portal {
+  grid-area: 3 / 2;
+  z-index: 1;
+  box-sizing: border-box;
+  width: auto;
+  margin: 0 1rem;
+  padding: 0.85rem 0.15rem 0.85rem 0.85rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 0.75rem;
   text-align: left;
   text-decoration: none;
-  color: var(--text, #ece4da);
-  background:
-    linear-gradient(100deg, #f4c8d724, #8884f61f 55%, #bad4e814),
-    #0f0d11c7;
-  border: 1px solid #f4c8d76b;
-  border-radius: 18px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: inset 0 1px #ece4da24, 0 16px 40px #00000073;
+  color: #1c1915;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #e4dccb;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-.course-portal:hover {
-  border-color: var(--book-pink, #f4c8d7);
-  background:
-    linear-gradient(100deg, #f4c8d738, #8884f62b 55%, #bad4e81f),
-    #16131ad9;
-}
-
-.course-portal:focus-visible {
-  outline: 2px solid var(--book-pink, #f4c8d7);
-  outline-offset: 3px;
-}
-
-.course-portal-copy {
+html.zh-entry .course-portal-copy {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 0.15rem;
 }
 
-.course-portal-kicker {
+html.zh-entry .course-portal-kicker {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.68rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--book-pink, #f4c8d7);
+  color: #8f3b2e;
 }
 
-.course-portal-title {
-  font-family: var(--font-display, "Iowan Old Style", Palatino, serif);
-  font-size: clamp(1.05rem, 2.7vw, 1.28rem);
+html.zh-entry .course-portal-title {
+  font-family: var(--font-display, Georgia, serif);
+  font-size: 1.2rem;
   font-weight: 400;
   line-height: 1.25;
-  text-shadow: 0 1px 10px #000000bf;
+  text-shadow: none;
 }
 
-.course-portal-go {
+html.zh-entry .course-portal-go {
   flex: none;
-  width: 2rem;
-  height: 2rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: var(--book-pink, #f4c8d7);
-  color: var(--bg, #0f0d11);
-  font-size: 1.05rem;
-  line-height: 1;
+  width: auto;
+  height: auto;
+  background: transparent;
+  color: #1f4b3c;
+  font-size: 1.15rem;
 }
 
-@media (max-width: 640px) {
-  .course-portal {
-    width: 100%;
-    margin-bottom: 18px;
-    padding: 13px 12px 13px 14px;
-    border-radius: 16px;
+html.zh-entry .course-portal:hover {
+  background: transparent;
+  border-color: #e4dccb;
+  color: #1f4b3c;
+}
+
+html.zh-entry .btn-load-group {
+  grid-column: 2;
+  grid-row: 4;
+  order: 7;
+  z-index: 1;
+  width: auto;
+  margin: 0 1rem;
+  display: flex;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+html.zh-entry .btn-load-group:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+html.zh-entry .btn-load,
+html.zh-entry .btn-load-arrow {
+  color: #1c1915;
+  background: transparent;
+  border: 1px solid #cfc6b6;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html.zh-entry .btn-load {
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  text-align: left;
+  font-weight: 550;
+}
+
+html.zh-entry .btn-load-arrow {
+  padding: 0.75rem 0.85rem;
+  border-left: 0;
+}
+
+html.zh-entry .landing-jspace-link {
+  grid-area: 5 / 2;
+  z-index: 1;
+  justify-self: start;
+  margin: 0 1rem 1rem;
+  padding: 0.2rem 0;
+  color: #1f4b3c;
+  opacity: 1;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transform: none;
+}
+
+html.zh-entry .landing-jspace-link:hover {
+  opacity: 1;
+  transform: none;
+}
+
+html.zh-entry .landing-learn-hint,
+html.zh-entry .error-banner {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  max-width: 40rem;
+  margin: 0;
+  color: #5c564c;
+  text-align: left;
+  text-shadow: none;
+}
+
+html.zh-entry [role="group"] button[lang] {
+  color: #1c1915;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+}
+
+html.zh-entry [role="group"] button[lang][aria-pressed="true"] {
+  color: #f6f1e6;
+  background: #1f4b3c;
+  border-color: #1f4b3c;
+}
+
+html.zh-entry .landing-footer {
+  z-index: 2;
+  left: 1.6rem;
+  right: 1.6rem;
+  bottom: 0.65rem;
+  color: #6b645a;
+  text-align: left;
+  pointer-events: auto;
+}
+
+html.zh-entry .landing-footer .local-link,
+html.zh-entry .landing-footer .landing-footer-void {
+  color: #5c564c;
+}
+
+html.zh-entry a:focus-visible,
+html.zh-entry button:focus-visible {
+  outline: 2px solid #1f4b3c;
+  outline-offset: 3px;
+}
+
+@media (max-width: 700px) {
+  html.zh-entry .landing-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: min(100% - 1.5rem, 40rem);
+    margin-inline: auto;
+    padding: 1.15rem 0 4.8rem;
+    row-gap: 0.8rem;
+  }
+
+  html.zh-entry .landing-content::after {
+    content: none;
+  }
+
+  html.zh-entry .landing-content > * {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    width: auto;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  html.zh-entry .landing-content > .sm\:hidden {
+    order: -1;
+    align-self: flex-end;
+  }
+
+  html.zh-entry .landing-tag { order: 1 !important; }
+  html.zh-entry .landing-title { order: 2 !important; font-size: clamp(2.15rem, 10vw, 2.7rem); }
+  html.zh-entry .landing-sub { order: 3 !important; }
+  html.zh-entry .btn-start-learning { order: 4 !important; align-self: stretch; width: 100%; margin-top: 0.2rem; }
+  html.zh-entry .course-portal { order: 5 !important; align-self: stretch; width: 100%; padding-left: 0; }
+  html.zh-entry .landing-specs { order: 6 !important; align-self: stretch; width: 100%; }
+  html.zh-entry .btn-load-group { order: 7 !important; align-self: stretch; width: 100%; }
+  html.zh-entry .landing-learn-hint { order: 8 !important; }
+  html.zh-entry .landing-jspace-link { order: 9 !important; margin-bottom: 0; }
+  html.zh-entry .landing-void-ad { order: 10 !important; align-self: stretch; width: 100%; justify-content: flex-start; text-align: left; }
+  html.zh-entry .error-banner { order: 11 !important; }
+
+  html.zh-entry .landing-footer {
+    left: 0.75rem;
+    right: 0.75rem;
+    font-size: 0.62rem;
   }
 }

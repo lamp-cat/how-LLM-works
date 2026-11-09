@@ -132,7 +132,7 @@ test('Dockerfile copy layout serves portal files from the image root', async t =
   assert.match(html, /\/how-LLM-works\/course-portal\.css/);
   const css = await fetch(`${origin}${base}/course-portal.css`);
   assert.equal(css.status, 200);
-  assert.match(await css.text(), /\.course-portal/);
+  assert.match(await css.text(), /html\.zh-entry/);
   const script = await fetch(`${origin}${base}/course-portal.js`);
   assert.equal(script.status, 200);
   assert.match(await script.text(), /\/how-image-models-work\//);
@@ -474,6 +474,31 @@ async function exerciseBrowser(origin) {
     assert.equal(desktopPortal.href, '/how-image-models-work/');
     assert.match(desktopPortal.text, /图像模型是如何运作的/);
     assert.equal(desktopPortal.visible, true, JSON.stringify(desktopPortal));
+    const homeCheck = await browser.eval(sessionId, `(() => {
+      const link = document.querySelector('a[data-course-portal]');
+      link.focus({ focusVisible: true });
+      const focus = getComputedStyle(link);
+      const start = [...document.querySelectorAll('button')].find(node => (node.textContent || '').includes('开始学习'));
+      const doc = document.documentElement;
+      return {
+        entry: doc.classList.contains('zh-entry'),
+        mascot: !!document.querySelector('img.landing-mascot, img[alt*="水豚"], img[src*="capybara"], img[src*="tool_text_to_image"]'),
+        start: !!(start && start.getBoundingClientRect().width > 40),
+        langs: [...document.querySelectorAll('button[lang]')].map(node => node.getAttribute('lang')),
+        overflow: doc.scrollWidth > doc.clientWidth + 1 || document.body.scrollWidth > innerWidth + 1,
+        outline: focus.outlineStyle + ' ' + focus.outlineWidth,
+        focused: document.activeElement === link,
+      };
+    })()`);
+    assert.equal(homeCheck.entry, true, JSON.stringify(homeCheck));
+    assert.equal(homeCheck.mascot, false, JSON.stringify(homeCheck));
+    assert.equal(homeCheck.start, true, JSON.stringify(homeCheck));
+    assert.equal(homeCheck.overflow, false, JSON.stringify(homeCheck));
+    assert.equal(homeCheck.focused, true, JSON.stringify(homeCheck));
+    assert.match(homeCheck.outline, /solid/);
+    assert.ok(homeCheck.langs.includes('zh-CN') && homeCheck.langs.includes('en'), JSON.stringify(homeCheck));
+    await saveShot(browser, sessionId, '/opt/cursor/artifacts/zh-home-focus.png');
+    await browser.eval(sessionId, 'document.activeElement && document.activeElement.blur()');
     await saveShot(browser, sessionId, '/opt/cursor/artifacts/zh-home-desktop.png');
     await browser.send('Emulation.setDeviceMetricsOverride', {
       width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
@@ -484,7 +509,48 @@ async function exerciseBrowser(origin) {
       const rect = link.getBoundingClientRect();
       return rect.width > 40 && rect.top >= 0 && rect.bottom <= innerHeight;
     })()`), 5000);
+    const mobileCheck = await browser.eval(sessionId, `(() => {
+      const doc = document.documentElement;
+      const start = [...document.querySelectorAll('button')].find(node => (node.textContent || '').includes('开始学习'));
+      const load = document.querySelector('.btn-load');
+      const link = document.querySelector('a[data-course-portal]');
+      const voidAd = document.querySelector('.landing-void-mark');
+      const voidColor = voidAd ? getComputedStyle(voidAd).color : '';
+      return {
+        mascot: !!document.querySelector('img.landing-mascot, img[src*="capybara"]'),
+        overflow: doc.scrollWidth > doc.clientWidth + 1 || document.body.scrollWidth > innerWidth + 1,
+        start: !!(start && start.getBoundingClientRect().height > 30),
+        tops: {
+          start: start ? Math.round(start.getBoundingClientRect().top) : null,
+          link: link ? Math.round(link.getBoundingClientRect().top) : null,
+          load: load ? Math.round(load.getBoundingClientRect().top) : null,
+        },
+        order: !!(start && link && load) && start.getBoundingClientRect().top < link.getBoundingClientRect().top && link.getBoundingClientRect().top < load.getBoundingClientRect().top,
+        voidColor,
+      };
+    })()`);
+    assert.equal(mobileCheck.mascot, false, JSON.stringify(mobileCheck));
+    assert.equal(mobileCheck.overflow, false, JSON.stringify(mobileCheck));
+    assert.equal(mobileCheck.start, true, JSON.stringify(mobileCheck));
+    assert.equal(mobileCheck.order, true, JSON.stringify(mobileCheck));
+    assert.match(mobileCheck.voidColor, /^rgb\(92, 86, 76\)$/);
     await saveShot(browser, sessionId, '/opt/cursor/artifacts/zh-home-mobile.png');
+    await browser.eval(sessionId, `(() => {
+      const start = [...document.querySelectorAll('button')].find(node => (node.textContent || '').includes('开始学习'));
+      start.focus({ focusVisible: true });
+      start.click();
+    })()`);
+    await waitFor(async () => String(await browser.eval(sessionId, 'location.pathname')).includes('/zh/chapters'), 15000);
+    assert.match(await browser.eval(sessionId, 'location.pathname'), /\/zh\/chapters/);
+    assert.equal(await browser.eval(sessionId, 'document.documentElement.classList.contains("zh-entry")'), false);
+    await navigate(browser, sessionId, `${origin}${base}/zh`);
+    await waitFor(async () => browser.eval(sessionId, `(() => {
+      const link = document.querySelector('a[data-course-portal]');
+      return !!link && document.documentElement.classList.contains('zh-entry');
+    })()`), 20000);
+    await browser.send('Emulation.setDeviceMetricsOverride', {
+      width: 390, height: 844, deviceScaleFactor: 2, mobile: true,
+    }, sessionId);
     await browser.eval(sessionId, `document.querySelector('a[data-course-portal]').click()`);
     await waitFor(async () => (await browser.eval(sessionId, 'location.pathname')) === '/how-image-models-work/', 10000);
     assert.equal(await browser.eval(sessionId, 'location.pathname'), '/how-image-models-work/');
@@ -494,7 +560,10 @@ async function exerciseBrowser(origin) {
     await navigate(browser, sessionId, `${origin}${base}/zh/chapters/overview`);
     await waitFor(async () => (await browser.eval(sessionId, 'location.pathname')) === `${base}/zh/chapters/overview`, 20000);
     assert.equal(await browser.eval(sessionId, 'document.querySelector("a[data-course-portal]")'), null);
+    assert.equal(await browser.eval(sessionId, 'document.documentElement.classList.contains("zh-entry")'), false);
+    assert.equal(await browser.eval(sessionId, '!!document.querySelector("img.landing-mascot")'), false);
     assert.equal(await browser.eval(sessionId, 'location.pathname.includes("/auth/")'), false);
+    await saveShot(browser, sessionId, '/opt/cursor/artifacts/zh-chapter-desktop.png');
     await waitFor(async () => browser.eval(sessionId, `(() => {
       const slider = document.querySelector('input[type=range]');
       if (!slider) return false;
@@ -552,6 +621,7 @@ async function exerciseBrowser(origin) {
       return true;
     });
     assert.deepEqual(bad, []);
+    assert.equal(requests.some(url => /tool_text_to_image|capybara/i.test(url)), false);
     assert.ok(requests.some(url => new URL(url).pathname === '/how-image-models-work/'));
     const favicon = await fetch(`${origin}/favicon.ico`);
     assert.equal(favicon.status, 404);
