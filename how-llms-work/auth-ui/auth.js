@@ -36,23 +36,44 @@ const strings = {
     server_error: 'The service is unavailable. Please try again later.', network_error: 'Connection failed. Please try again.',
   },
 };
+const base = (globalThis.__HOW_LLMS_BASE__ || '').replace(/\/+$/, '');
+function withBase(urlPath) {
+  if (!base || !urlPath.startsWith('/') || urlPath.startsWith('//') || urlPath === base || urlPath.startsWith(`${base}/`)) return urlPath;
+  return base + urlPath;
+}
+function stripBase(pathname) {
+  if (!base) return pathname;
+  if (pathname === base) return '/';
+  if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length) || '/';
+  return null;
+}
 const params = new URLSearchParams(location.search);
 function safeNext(raw) {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\u0000-\u001f]/.test(raw)) return null;
   try {
     const url = new URL(raw, location.origin);
-    if (url.origin !== location.origin || url.pathname.startsWith('/auth/')) return null;
+    const path = stripBase(url.pathname);
+    if (url.origin !== location.origin || path == null || path === '/auth' || path.startsWith('/auth/')) return null;
     return url.pathname + url.search + url.hash;
   } catch { return null; }
+}
+function retargetLocale(full, nextLocale) {
+  const url = new URL(full, location.origin);
+  let path = stripBase(url.pathname);
+  if (path == null) return full;
+  if (path === '/zh' || path.startsWith('/zh/')) path = path.slice(3) || '/';
+  if (nextLocale === 'zh' && !path.startsWith('/zh') && path !== '/account') path = path === '/' ? '/zh' : `/zh${path}`;
+  return withBase(path) + url.search + url.hash;
 }
 let storedLocale;
 try { storedLocale = localStorage.getItem('mlx:preferences:locale'); } catch {}
 const incomingNext = safeNext(params.get('next'));
+const barePath = stripBase(location.pathname) ?? '/';
 let locale = ['zh', 'en'].includes(params.get('lang')) ? params.get('lang')
-  : incomingNext ? (incomingNext.startsWith('/zh') ? 'zh' : 'en')
+  : incomingNext ? ((stripBase(new URL(incomingNext, location.origin).pathname) || '').startsWith('/zh') ? 'zh' : 'en')
     : ['zh', 'en'].includes(storedLocale) ? storedLocale : 'zh';
-const mode = location.pathname === '/account' ? 'account' : location.pathname.endsWith('/register') ? 'register' : 'login';
-let next = incomingNext || (locale === 'zh' ? '/zh/chapters/overview' : '/chapters/overview');
+const mode = barePath === '/account' ? 'account' : barePath.endsWith('/register') ? 'register' : 'login';
+let next = incomingNext || withBase(locale === 'zh' ? '/zh/chapters/overview' : '/chapters/overview');
 let csrfToken = '';
 let account = null;
 let busy = true;
@@ -61,7 +82,7 @@ let noticeSuccess = Boolean(noticeKey);
 const $ = id => document.getElementById(id);
 const form = $('auth-form');
 function link(route, extras = {}) {
-  return `${route}?${new URLSearchParams({ next, lang: locale, ...extras })}`;
+  return `${withBase(route)}?${new URLSearchParams({ next, lang: locale, ...extras })}`;
 }
 function notify(key, success = false) {
   noticeKey = key; noticeSuccess = success; render();
@@ -93,7 +114,7 @@ function render() {
   $('switch-link').textContent = mode === 'register' ? t.goLogin : t.register;
   $('switch-link').href = link(mode === 'register' ? '/auth/login' : '/auth/register');
   $('continue-link').href = next;
-  document.querySelector('.brand').href = locale === 'zh' ? '/zh/chapters/overview' : '/chapters/overview';
+  document.querySelector('.brand').href = withBase(locale === 'zh' ? '/zh/chapters/overview' : '/chapters/overview');
   $('toggle-password').setAttribute('aria-label', $('password').type === 'password' ? t.showPassword : t.hidePassword);
   $('notice').hidden = !noticeKey;
   $('notice').classList.toggle('success', noticeSuccess);
@@ -107,8 +128,7 @@ function render() {
 document.querySelectorAll('[data-language]').forEach(button => button.addEventListener('click', () => {
   locale = button.dataset.language;
   try { localStorage.setItem('mlx:preferences:locale', locale); } catch {}
-  if (next === '/zh' || next.startsWith('/zh/')) next = next.slice(3) || '/';
-  if (locale === 'zh' && !next.startsWith('/zh') && next !== '/account') next = next === '/' ? '/zh' : `/zh${next}`;
+  next = retargetLocale(next, locale);
   const url = new URL(location.href);
   url.searchParams.set('lang', locale); url.searchParams.set('next', next);
   history.replaceState(null, '', url);
@@ -119,7 +139,7 @@ $('toggle-password').addEventListener('click', () => {
   render();
 });
 async function request(route, data) {
-  const response = await fetch(`/api/auth/${route}`, {
+  const response = await fetch(withBase(`/api/auth/${route}`), {
     method: 'POST', credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: JSON.stringify(data),
@@ -166,7 +186,7 @@ $('logout-button').addEventListener('click', async () => {
 });
 render();
 try {
-  const response = await fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' });
+  const response = await fetch(withBase('/api/auth/session'), { credentials: 'same-origin', cache: 'no-store' });
   if (!response.ok) throw new Error('server_error');
   const result = await response.json();
   csrfToken = result.csrfToken; account = result.user;

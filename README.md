@@ -1,6 +1,6 @@
 # How LLMs Work · LLM 是怎么工作的
 
-LLM 交互教学网站的本地运行项目，包含中英文课程、教学演示、浏览器端模型推理，以及注册与登录功能。
+LLM 交互教学网站的本地运行项目，包含中英文课程、教学演示和浏览器端模型推理。默认不需要注册或登录。
 
 ## 本地启动
 
@@ -12,7 +12,9 @@ cd how-LLM-works/how-llms-work
 npm start
 ```
 
-打开 <http://localhost:5173/zh/chapters/overview>，先注册账号再登录。macOS 用户也可以双击 `how-llms-work/启动网站.command`。
+打开 <http://localhost:5173/zh/chapters/overview>。macOS 用户也可以双击 `how-llms-work/启动网站.command`。只有设置 `REQUIRE_AUTH=1` 时才会要求注册和登录。
+
+生产环境的统一入口是 `https://api.garryai.icu/how-LLM-works/zh`。中文首页保留原来的 LLM 课程，并提供「图像模型是如何运作的」入口，指向 `/how-image-models-work/`。`/learn/` 保持原样。反向代理必须保留大小写敏感的 `/how-LLM-works` 前缀。镜像默认 `REQUIRE_AUTH=0`，两门课程都可直接打开；不要把它改成 `1`。当前生产没有部署 `model.safetensors`，并且 `ALLOW_UPSTREAM_MODEL=0`，所以页面里的“加载模型”不会完成推理。部署文件在 `Dockerfile` 和 `deploy/`。本地 `npm start` 不设置 `BASE_PATH` 时仍从网站根路径提供服务。
 
 ## 下载模型权重
 

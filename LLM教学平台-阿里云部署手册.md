@@ -5,6 +5,8 @@
 部署基线：Ubuntu 24.04 LTS、Node.js 24 LTS、Nginx、SQLite  
 文档状态：依据现有代码核对的操作方案；未连接或操作实际阿里云资源。
 
+在 `api.garryai.icu` 上与根路径 New API、`/api/*` 以及 `/how-image-models-work/` 同时部署时，不要使用本文的整站 `location /`。使用仓库里的 `Dockerfile` 和 `deploy/nginx-how-LLM-works.location.conf`，公开前缀固定为大小写敏感的 `/how-LLM-works/`，并由代理保留该前缀。
+
 ## 1. 部署方案与当前边界
 
 第一阶段将现有前后端放到一台 ECS 上，由 Nginx 提供 HTTPS，再转发到 Node 服务。前端已经是构建后的 HTML、JS、CSS、Worker 与 WASM，无需运行 `npm run build`，当前也无需安装 npm 运行依赖。模型推理发生在用户浏览器中，ECS 不需要 GPU。
